@@ -25,7 +25,7 @@ lidar_pixels_to_add = 2; %increase pixel count of lidar points for
 %visualization purposes. 
 resampling_ratio = 0.4; %of particle array components to be kept 
 random_walk =20; %random walk pixels 
-recently_moved_random_walk =100; %random walk pixels 
+recently_moved_random_walk =50; %random walk pixels 
 random_walk_cycles = 6; %particle filter cycle increment for random walk  
 
 
@@ -63,6 +63,7 @@ if create_plots
 end; 
 
 %Let the user select the original location of the robot 
+xlabel('Please select a new point for the robot', 'FontSize', 20); 
 [robot_x,robot_y] = ginput(1); 
 close all;
 
@@ -80,10 +81,9 @@ imageWithRobot=plot_on_image(image_rgb, robot_x, ...
 close all; 
 fig=figure; 
 h=imshow(originalRobot_OriginalDistribution) 
-set(h,'ButtonDownFcn',{@get_last_click});
 hold on; 
 
-title('Map with Random Particle Distribution and Robot in Red', 'FontSize', 26); 
+title('Map with Random Particle Distribution (Purple) and Robot (Red) and Estimated Robot Position (Yellow Circle) ', 'FontSize', 20); 
 
 set(gcf, 'Position', get(0,'Screensize'))
 
@@ -97,32 +97,36 @@ counter = 0;
 buttonUpdateCounter = 0; 
 initPlotsCreated=false; 
 recentlyMoved=false; 
+robotPositionUpdated = false; 
 
 while true
     
       
-    if exist('new_x_pos') %Then someone clicked on the map and moved
-        % the robot
-        xMove=new_x_pos-robot_x; 
-        yMove=new_y_pos-robot_y;  
-        
-        robot_x = new_x_pos; 
-        robot_y = new_y_pos; 
-        
+    if robotPositionUpdated %Then someone clicked on the map and moved
+       
         %Let's move the particles by a similar amount, but add in some gaussian
         %noise to simulate the error in our estimate
     
-        if xMove > 1 | yMove > 1
+        if abs(xMove) >= 1 || abs(yMove) >= 1
 
-            xMove=awgn(ones(1, number_particles)*xMove, 1); 
-            yMove=awgn(ones(1, number_particles)*yMove, 1); 
+            xMove=awgn(ones(1, number_particles)*xMove, 100); 
+            yMove=awgn(ones(1, number_particles)*yMove, 100); 
 
             for i = 1 : number_particles
-                particleArray(i).x = ...
-                    floor(min(max(particleArray(i).x + xMove(i),1), x_pixels)); 
-                particleArray(i).y = ...
-                    floor(min(max(particleArray(i).y + yMove(i),1), y_pixels)); 
+                
+                p=particle;
+                desiredX=floor(min(max(particleArray(i).x + xMove(i),1), x_pixels)); 
+                desiredY=floor(min(max(particleArray(i).y + yMove(i),1), y_pixels)); 
+
+                movementUpdatePartArray(i)=p.set_x_y(desiredX, desiredY);
+                clear p; 
+
+  
             end
+            
+            clear particleArray; 
+            particleArray=movementUpdatePartArray; 
+            clear movementUpdatePartArray; 
 
             %Update our picture of the robot         
             imageWithRobot=plot_on_image(image_rgb, robot_x, ...
@@ -132,6 +136,8 @@ while true
             recentlyMoved=true;
 
         end
+        
+        robotPositionUpdated = false; 
         
     end 
     
@@ -246,8 +252,6 @@ while true
     
     figure(fig); 
     h=imshow(imageWithRobotParticlesCircle);
-    set(h,'ButtonDownFcn',{@get_last_click});
-    %set(gcf, 'Position', get(0,'Screensize'))
     
     counter=counter + 1; 
     
@@ -297,12 +301,28 @@ while true
         imageWithRobotParticles=plot_on_image(imageWithRobot, [particleArray.x], ...
         [particleArray.y], 75, 0 , 130, 2);
     
-        figure(fig); 
+        figure(fig);     
         h=imshow(imageWithRobotParticles);
-        set(h,'ButtonDownFcn',{@get_last_click});
-        %set(gcf, 'Position', get(0,'Screensize'))
         
         pause(0.1); 
+    elseif counter == (random_walk_cycles -1)
+        xlabel('Please select a new point for the robot, hit enter to keep previous point', 'FontSize', 20); 
+        [robot_x_new,robot_y_new] = ginput(1); 
+        xlabel('', 'FontSize', 20);
+        if length(robot_x_new) > 0
+            xMove = robot_x_new - robot_x; 
+            yMove = robot_y_new - robot_y ; 
+        
+            robot_x = ceil(robot_x_new); 
+            robot_y = ceil(robot_y_new); 
+
+            robotPositionUpdated = true; 
+        else
+            xMove = 0; 
+            yMove = 0; 
+        end
+        
+        
     end 
     
     pause(0.1);
