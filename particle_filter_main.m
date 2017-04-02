@@ -222,6 +222,9 @@ while true
        
     shapeInserter = vision.ShapeInserter('Shape','Circles', ...
         'BorderColor','Custom', 'CustomBorderColor',uint8([255 255 0]));
+    
+    imageWithRobotParticlesCircle= ...
+        shapeInserter(imageWithRobotParticles, estimateCircle);
        
     figure(fig); 
     h=imshow(imageWithRobotParticlesCircle);
