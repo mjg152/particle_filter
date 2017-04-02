@@ -13,8 +13,8 @@
         
         function obj=randomize_location(obj,x_size, y_size)
             rand_location = [x_size, y_size].*rand(1,2);
-            obj.x=floor(rand_location(1)); 
-            obj.y=floor(rand_location(2)); 
+            obj.x=ceil(rand_location(1)); 
+            obj.y=ceil(rand_location(2)); 
         end
         
 
@@ -54,10 +54,14 @@
             sensor_measurement(sensor_nan) = high_dist; 
             obj.distances(particle_nan) = high_dist; 
 
-            p_i=norm(obj.distances-sensor_measurement); 
+            errorMagnitude =norm(obj.distances-sensor_measurement); 
+                       
+            obj.weight = errorMagnitude; 
+            %Alternately we could calculate a probability here:
+       
+            %pd = makedist('Normal' , 'mu', 0, 'sigma', 2)
+            %obj.weight = pdf(pd,errorMagnitude);
 
-             
-            obj.weight = p_i; 
             
         end
         

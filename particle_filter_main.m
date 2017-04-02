@@ -3,7 +3,7 @@ close all;
 
 %% Algorithm Inputs
 
-number_particles = 100; 
+number_particles = 250; 
 nan_distance_low= 20; %distance to use for weight calculation if both the 
 %sensor and the particle read nan for a given lidar range 
 nan_distance_high=150; %distance to use for weight calculation if only one
@@ -25,7 +25,7 @@ lidar_pixels_to_add = 2; %increase pixel count of lidar points for
 %visualization purposes. 
 resampling_ratio = 0.4; %of particle array components to be kept 
 random_walk =20; %random walk pixels 
-recently_moved_random_walk =50; %random walk pixels 
+recently_moved_random_walk =40; %random walk pixels 
 random_walk_cycles = 6; %particle filter cycle increment for random walk  
 
 
@@ -42,7 +42,7 @@ image_bw=im2bw(image_rgb);
 
 for i = 1: number_particles
      p = particle;
-     particleArray(i)=p.randomize_location(x_pixels, y_pixels)
+     particleArray(i)=p.randomize_location(x_pixels, y_pixels);
 end
 
 % Let's make an image of our original randomized particle locations
@@ -55,12 +55,7 @@ figure;
 
 imshow(imageOut); 
 title('Map with Random Particle Distribution, Particles in Purple', 'FontSize', 26); 
-
-set(gcf, 'Position', get(0,'Screensize'))
-
-if create_plots 
-    saveas(gcf, 'InitialRandomDistribution', 'epsc') 
-end; 
+set(gcf, 'Position', get(0,'Screensize'));
 
 %Let the user select the original location of the robot 
 xlabel('Please select a new point for the robot', 'FontSize', 20); 
@@ -80,18 +75,11 @@ imageWithRobot=plot_on_image(image_rgb, robot_x, ...
 
 close all; 
 fig=figure; 
-h=imshow(originalRobot_OriginalDistribution) 
+imshow(originalRobot_OriginalDistribution);
 hold on; 
 
 title('Map with Random Particle Distribution (Purple) and Robot (Red) and Estimated Robot Position (Yellow Circle) ', 'FontSize', 20); 
-
 set(gcf, 'Position', get(0,'Screensize'))
-
-if create_plots 
-    saveas(gcf, 'OriginalRobotOriginalDistribution', 'epsc') 
-end; 
-
-
 
 counter = 0; 
 buttonUpdateCounter = 0; 
@@ -99,6 +87,7 @@ initPlotsCreated=false;
 recentlyMoved=false; 
 robotPositionUpdated = false; 
 
+%% Particle Filtering Iteration 
 while true
     
       
@@ -117,10 +106,8 @@ while true
                 p=particle;
                 desiredX=floor(min(max(particleArray(i).x + xMove(i),1), x_pixels)); 
                 desiredY=floor(min(max(particleArray(i).y + yMove(i),1), y_pixels)); 
-
                 movementUpdatePartArray(i)=p.set_x_y(desiredX, desiredY);
                 clear p; 
-
   
             end
             
@@ -145,7 +132,7 @@ while true
     [laser_distances, part_robot_lidar] = laser_scan_model ( robot_x, robot_y, ...
         min_lidar_dist, max_lidar_dist, num_rays, lidar_min_angle, ...
         lidar_max_angle, image_bw, originalRobot_OriginalDistribution,  ...
-        0.5, distance_step, lidar_rgb, 1, true, 2);
+        0.5, distance_step, lidar_rgb, gaussian_power_robot, true, 2);
 
     if ~initPlotsCreated
         fig1=figure; 
@@ -161,7 +148,7 @@ while true
         initPlotsCreated = true; 
     end 
     
-    %Sum up our previous weights 
+    %Calculate particle distances and weights 
     
     % Generate particle LIDAR pings and calculate weights 
     for i = 1 : number_particles
@@ -189,8 +176,8 @@ while true
         particleArray(i).normalize_weight(maxWeights); 
     end 
     
-    %Resample, pick 100 particles randomly from the group with the lowest 
-    %normalized weights. Start by dropping some of our worst particles 
+    %Resample, pick 100 particles from the group with the best weights 
+    % Start by dropping some of our worst particles 
 
     normalizedWeights = [particleArray.normalized_weight];
     [sortedWeights, indices] = sort(normalizedWeights, 'ascend'); 
@@ -201,9 +188,10 @@ while true
     isolatedParticleArrayLength = length(isolatedParticleArray); 
 
     %Now pack newParticleArray in a loop by picking from our 
-    %isolatedParticleArray at random just keep our 25 best though
+    %isolatedParticleArray at random just keep the best 25% of the
+    %particles
     for i = 1 : number_particles
-        if i > 25
+        if i > (0.25*number_particles)
             indexToSelect = ...
             min(max(ceil(rand(1)*isolatedParticleArrayLength),1)...
             ,isolatedParticleArrayLength) ; 
@@ -234,22 +222,7 @@ while true
        
     shapeInserter = vision.ShapeInserter('Shape','Circles', ...
         'BorderColor','Custom', 'CustomBorderColor',uint8([255 255 0]));
-    
-    imageWithRobotParticlesCircle= ...
-        shapeInserter(imageWithRobotParticles, estimateCircle);
-    
-    weightedX=sum(particleXs.*(weights))/length(particleXs); 
-    weightedY=sum(particleYs.*(weights))/length(particleYs); 
-    weightCircle = int32([weightedX weightedY 6]);
-    
-    shapeInserter = vision.ShapeInserter('Shape','Circles', ...
-        'BorderColor','Custom', 'CustomBorderColor',uint8([255 255 0]));
-    
-    imageWithRobotParticlesCircle= ...
-        shapeInserter(imageWithRobotParticlesCircle, estimateCircle);
-    
-    % [x1 y1 radius1;x2 y2 radius2]
-    
+       
     figure(fig); 
     h=imshow(imageWithRobotParticlesCircle);
     
@@ -289,13 +262,12 @@ while true
                     clear p; 
 
                 end
-
             end
         end
+        
         clear particleArray; 
         particleArray = randWalkPartArray;
         clear randWalkPartArray; 
-        
         counter = 0; 
         
         imageWithRobotParticles=plot_on_image(imageWithRobot, [particleArray.x], ...
@@ -306,6 +278,8 @@ while true
         
         pause(0.1); 
     elseif counter == (random_walk_cycles -1)
+        %We've honed in on the robot's location, ask the user to move it 
+        %if they'd like to do so. Hit enter to do nothing 
         xlabel('Please select a new point for the robot, hit enter to keep previous point', 'FontSize', 20); 
         [robot_x_new,robot_y_new] = ginput(1); 
         xlabel('', 'FontSize', 20);
