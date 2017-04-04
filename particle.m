@@ -60,7 +60,7 @@
             %Alternately we could calculate a probability here:
        
             %pd = makedist('Normal' , 'mu', 0, 'sigma', 2)
-            %obj.weight = pdf(pd,errorMagnitude);
+            %obj.weight = pdf(pd,errorMagnitude/100);
 
             
         end
